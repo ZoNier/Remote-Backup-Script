@@ -1,65 +1,72 @@
-# SCP Backup Script
+# 🔐 SCP Backup Script
 
-A Bash script for creating remote backups over SSH using `tar` and `scp`.  
-Supports selecting root directories, custom subdirectories, remote sudo access, local retention policies, and logging.
+A flexible Bash script for remote backups over SSH using `tar` and `scp`.
+Supports custom directory selection, remote `sudo`, retention policy, and logging with rotation.
 
-## Features
+---
 
-- Backup of standard directories (e.g. `/etc`, `/home`, `/var`)
-- Backup of specific subdirectories
-- Remote archive creation using `tar`
-- Optional `sudo` support for remote archive creation
-- Download of archives via `scp`
-- Automatic log rotation
-- Retention policy for old backups
-- Timestamped logs and archive names
+## 🚀 Features
 
-## Requirements
+* 🔁 Backup top-level directories (`/etc`, `/home`, `/var`, etc.)
+* 🎯 Backup specific subdirectories (`/var/log/nginx`, `/home/user1`, etc.)
+* 📦 Remote archive creation using `tar`
+* 🔐 Optional `sudo` on the remote host
+* 📥 Download `.tar` archives via `scp`
+* 🧹 Automatic log rotation
+* ♻️ Retention policy for local backups
+* 🕒 Timestamped archive and log entries
 
-- Bash 4+
-- SSH access to the remote host
-- The remote user must:
-  - Have passwordless sudo access (if used in automation), or
-  - Be able to run `tar` without `sudo`
-- Local script execution should be done by `root` (especially when automated)
+---
 
-## Usage
+## 📋 Requirements
+
+* Bash **4+**
+* SSH access to the remote host
+* The remote user must:
+
+  * Be able to run `tar` on required directories
+  * Have **passwordless `sudo` access** if `-a` is used
+* Local execution **must be done as root** (especially in automation)
+
+---
+
+## 🧪 Usage
 
 ```bash
 ./scp-backup.sh -r <remote_ip> -p <port> -u <user> [-d <dirs_comma_separated>] [-Sd <subdirs_comma_separated>] [-a] [-s <local_save_dir>] [-m <max_copies>]
 ```
 
-### Parameters
+### 📌 Parameters
 
-| Flag       | Description |
-|------------|-------------|
-| `-r`       | Remote server IP address (**required**) |
-| `-p`       | SSH port (**required**) |
-| `-u`       | SSH username (**required**) |
-| `-d`       | Comma-separated list of top-level directories to back up (e.g. `etc,home,var`) |
-| `-Sd`      | Comma-separated list of full paths to specific subdirectories (e.g. `/home/user1,/var/log/nginx`) |
-| `-a`       | **Ask for remote `sudo` password manually** (for interactive use only) |
-| `-s`       | Local directory to save backups (default: current working directory) |
-| `-m`       | Maximum number of local backup copies to keep (old ones will be deleted) |
+| Flag  | Description                                                            |
+| ----- | ---------------------------------------------------------------------- |
+| `-r`  | Remote server IP or hostname (**required**)                            |
+| `-p`  | SSH port (**required**)                                                |
+| `-u`  | SSH username (**required**)                                            |
+| `-d`  | Top-level directories to back up (e.g. `etc,home,var`)                 |
+| `-Sd` | Specific subdirectories to include (e.g. `/home/user1,/var/log/nginx`) |
+| `-a`  | Prompt for remote `sudo` password (interactive use only)               |
+| `-s`  | Local backup directory (default: current working directory)            |
+| `-m`  | Max number of backup copies to retain (oldest are deleted)             |
 
-> You must specify at least one of `-d` or `-Sd`.
-
----
-
-### Notes on `-a` (ask for sudo password)
-
-The `-a` flag is intended **only for manual usage** when the remote user is part of the `sudo` group and `sudo` access requires a password.  
-This allows `tar` to be run with `sudo` for directories requiring elevated permissions.
-
-**Do not use `-a` in cron jobs or other automated systems**, as it prompts for input.
-
-For automated backups:
-- Run the script locally as `root`
-- Use a remote user that can run `tar` on the desired paths **without needing `sudo` or a password**
+> ⚠️ **At least one of `-d` or `-Sd` must be specified.**
 
 ---
 
-## Example
+## 🔐 Notes on `-a` (Ask for Remote Sudo)
+
+Use `-a` **only for manual runs**, if your remote user requires a password for `sudo`.
+This flag prompts you to enter the password for archive creation via:
+
+```bash
+sudo tar czf ...
+```
+
+> ❌ Avoid `-a` in `cron` or automation — it requires interactive input.
+
+---
+
+## 💡 Example
 
 ```bash
 sudo ./scp-backup.sh \
@@ -72,36 +79,47 @@ sudo ./scp-backup.sh \
   -m 3
 ```
 
-This command will:
-- Connect to `192.168.0.100` on port `2222` as user `webdev`
-- Create and download backups of `/etc`, `/home`, `/home/user1`, and `/var/log/nginx`
-- Save them under `/mnt/backup/192.168.0.100/`
-- Keep the last 3 backup folders, deleting older ones
-- Log all operations under `/var/log/scp-backup/192.168.0.100.log`
+✅ This command will:
+
+* Connect to `192.168.0.100` via port `2222` as user `webdev`
+* Create remote tar archives of:
+
+  * `/etc`
+  * `/home`
+  * `/home/user1`
+  * `/var/log/nginx`
+* Save the archives locally to: `/mnt/backup/192.168.0.100/`
+* Retain **only the 3 most recent** backups
+* Log all actions to: `/var/log/scp-backup/192.168.0.100.log`
 
 ---
 
-## Cron Example
+## ⏰ Automate with Cron
 
-Run a daily backup at 2:00 AM:
+Add this to root's crontab to run daily at **2:00 AM**:
 
 ```cron
-0 2 * * * root /path/to/scp-backup.sh -r 192.168.0.100 -p 2222 -u webdev -d etc,home -s /mnt/backup -m 7
+0 2 * * * root /opt/scp-backup.sh -r 192.168.0.100 -p 2222 -u webdev -d etc,home -s /mnt/backup -m 7
 ```
 
-Make sure:
-- The script is executable: `chmod +x scp-backup.sh`
-- You run it as `root` (or configure passwordless `sudo` access on the remote side if needed)
+### 📌 Notes:
+
+* Ensure the script is **executable**:
+
+  ```bash
+  chmod +x /opt/scp-backup.sh
+  ```
+* Remote user should not require `sudo` password in cron use cases.
 
 ---
 
-## Logs
+## 📄 Logs
 
-Logs are stored in `/var/log/scp-backup/<remote_ip>.log`  
-Each log is rotated to keep only the last 1000 lines.
+* 📍 Log files: `/var/log/scp-backup/<remote_ip>.log`
+* 📜 Automatic rotation: logs trimmed to **last 1000 lines**
 
 ---
 
-## License
+## 📜 License
 
-MIT License
+This project is licensed under the [MIT License](LICENSE).
