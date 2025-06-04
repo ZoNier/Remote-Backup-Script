@@ -1,74 +1,107 @@
-# Remote Backup Script via SSH (scp & tar)
+# SCP Backup Script
 
-This is a bash script for backing up directories and subdirectories from a remote Linux server via SSH. The script creates compressed tar archives on the remote server and securely downloads them to the local machine. It supports backing up multiple root directories or arbitrary full-path subdirectories.
+A Bash script for creating remote backups over SSH using `tar` and `scp`.  
+Supports selecting root directories, custom subdirectories, remote sudo access, local retention policies, and logging.
 
 ## Features
 
-- Runs as root on the local machine for full control and logging.
-- Supports passwordless SSH authentication (recommended).
-- Optionally requests sudo password for remote archive creation.
-- Creates compressed `.tar.gz` archives on the remote server.
-- Downloads archives with `scp`.
-- Cleans up temporary archives on the remote server.
-- Maintains local backup directories with timestamp.
-- Limits number of saved backup copies locally.
-- Rotates logs (max 1000 lines).
+- Backup of standard directories (e.g. `/etc`, `/home`, `/var`)
+- Backup of specific subdirectories
+- Remote archive creation using `tar`
+- Optional `sudo` support for remote archive creation
+- Download of archives via `scp`
+- Automatic log rotation
+- Retention policy for old backups
+- Timestamped logs and archive names
 
 ## Requirements
 
-- SSH access to the remote server.
-- `tar` installed on the remote server.
-- `scp` and `ssh` on the local machine.
-- Optional: sudo access on the remote server if backing up directories requiring elevated permissions.
+- Bash 4+
+- SSH access to the remote host
+- The remote user must:
+  - Have passwordless sudo access (if used in automation), or
+  - Be able to run `tar` without `sudo`
+- Local script execution should be done by `root` (especially when automated)
 
 ## Usage
 
 ```bash
-./backup_script.sh -r <remote_ip> -p <ssh_port> -u <ssh_user> [-d <dirs_comma_separated>] [-Sd <subdirs_comma_separated>] [-a] [-s <local_save_dir>] [-m <max_copies>]
+./scp-backup.sh -r <remote_ip> -p <port> -u <user> [-d <dirs_comma_separated>] [-Sd <subdirs_comma_separated>] [-a] [-s <local_save_dir>] [-m <max_copies>]
 ```
 
 ### Parameters
 
-- `-r` Remote server IP address.
-- `-p` SSH port (usually 22).
-- `-u` SSH username.
-- `-d` Comma-separated list of root directories to backup (e.g., `etc,home,var`).
-- `-Sd` Comma-separated list of full-path subdirectories to backup (e.g., `/home/user1,/var/log/nginx`).
-- `-a` Ask for sudo password on remote server (optional).
-- `-s` Local directory to save backups (optional, defaults to current directory).
-- `-m` Maximum number of saved backup copies locally (optional, no limit by default).
+| Flag       | Description |
+|------------|-------------|
+| `-r`       | Remote server IP address (**required**) |
+| `-p`       | SSH port (**required**) |
+| `-u`       | SSH username (**required**) |
+| `-d`       | Comma-separated list of top-level directories to back up (e.g. `etc,home,var`) |
+| `-Sd`      | Comma-separated list of full paths to specific subdirectories (e.g. `/home/user1,/var/log/nginx`) |
+| `-a`       | **Ask for remote `sudo` password manually** (for interactive use only) |
+| `-s`       | Local directory to save backups (default: current working directory) |
+| `-m`       | Maximum number of local backup copies to keep (old ones will be deleted) |
 
-### Example
-
-```bash
-./backup_script.sh -r 192.168.0.100 -p 2222 -u webdev -d etc,home -Sd /home/user1,/var/log/nginx -a -s /mnt/backup -m 3
-```
+> You must specify at least one of `-d` or `-Sd`.
 
 ---
 
-## Automating with Cron
+### Notes on `-a` (ask for sudo password)
 
-You can automate backups by scheduling this script with `cron`.
+The `-a` flag is intended **only for manual usage** when the remote user is part of the `sudo` group and `sudo` access requires a password.  
+This allows `tar` to be run with `sudo` for directories requiring elevated permissions.
 
-Example `crontab` entry to run backup every day at 2:30 AM:
+**Do not use `-a` in cron jobs or other automated systems**, as it prompts for input.
 
-```cron
-30 2 * * * /path/to/backup_script.sh -r 192.168.0.100 -p 22 -u webdev -d etc,home -Sd /home/user1,/var/log/nginx -a -s /mnt/backup -m 7 >> /var/log/scp-backup/cron_backup.log 2>&1
+For automated backups:
+- Run the script locally as `root`
+- Use a remote user that can run `tar` on the desired paths **without needing `sudo` or a password**
+
+---
+
+## Example
+
+```bash
+sudo ./scp-backup.sh \
+  -r 192.168.0.100 \
+  -p 2222 \
+  -u webdev \
+  -d etc,home \
+  -Sd /home/user1,/var/log/nginx \
+  -s /mnt/backup \
+  -m 3
 ```
 
-- Make sure your SSH keys are set up for passwordless authentication or handle password prompts accordingly.
-- Redirecting output to a log file helps track backup activity and errors.
+This command will:
+- Connect to `192.168.0.100` on port `2222` as user `webdev`
+- Create and download backups of `/etc`, `/home`, `/home/user1`, and `/var/log/nginx`
+- Save them under `/mnt/backup/192.168.0.100/`
+- Keep the last 3 backup folders, deleting older ones
+- Log all operations under `/var/log/scp-backup/192.168.0.100.log`
+
+---
+
+## Cron Example
+
+Run a daily backup at 2:00 AM:
+
+```cron
+0 2 * * * root /path/to/scp-backup.sh -r 192.168.0.100 -p 2222 -u webdev -d etc,home -s /mnt/backup -m 7
+```
+
+Make sure:
+- The script is executable: `chmod +x scp-backup.sh`
+- You run it as `root` (or configure passwordless `sudo` access on the remote side if needed)
+
+---
+
+## Logs
+
+Logs are stored in `/var/log/scp-backup/<remote_ip>.log`  
+Each log is rotated to keep only the last 1000 lines.
 
 ---
 
 ## License
 
 MIT License
-
----
-
-## Notes
-
-- This script assumes the remote user has permission to read the specified directories.
-- For directories requiring root privileges on the remote host, use the `-a` flag and provide sudo password.
-- Logs are saved under `/var/log/scp-backup/` by default.
